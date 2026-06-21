@@ -111,6 +111,78 @@ The model is evaluated using a comprehensive set of metrics suited to imbalanced
 
 ---
 
+## Results
+ 
+### Experiment 1 vs 2: Effect of StandardScaler
+ 
+| Metric | Baseline (No Scaling) Train | Baseline Test | StandardScaler Train | StandardScaler Test | Δ (Test) |
+|---|---|---|---|---|---|
+| Accuracy | 0.9841 | 0.9836 | 0.9853 | 0.9848 | +0.0012 |
+| AUC-ROC | 0.9954 | 0.9942 | — | — | — |
+| PR-AUC | 0.3735 | 0.3014 | 0.3853 | 0.3063 | +0.0049 |
+| Precision | 0.1866 | 0.1698 | 0.1984 | 0.1811 | +0.0113 |
+| Recall | 1.0000 | 0.9985 | 1.0000 | 0.9985 | 0.0000 |
+| F1 (weighted) | 0.9895 | 0.9893 | 0.9902 | 0.9900 | +0.0007 |
+| F2 (positive class) | 0.5342 | 0.5052 | 0.5531 | 0.5248 | +0.0196 |
+| MCC | 0.4285 | 0.4083 | 0.4422 | 0.4220 | +0.0137 |
+| Cost-Weighted Utility | -0.0122 | -0.0131 | -0.0111 | -0.0119 | +0.0012 |
+| Training Time (s) | — | 100.1 | — | 105.1 | +5.0 |
+ 
+### Confusion Matrix: Baseline vs StandardScaler (Test Set)
+ 
+| Outcome | Baseline | StandardScaler | Change |
+|---|---|---|---|
+| TP (caught bankruptcies) | 674 | 674 | 0 |
+| TN (correctly healthy) | 196,519 | 196,767 | +248 |
+| FP (false alarms) | 3,296 | 3,048 | -248 |
+| FN (missed bankruptcies) | 1 | 1 | 0 |
+ 
+**Key finding:** StandardScaler reduced false positives by 248 (from 3,296 to 3,048) without affecting recall. The improvement is attributable to numerical side-effects of standardisation on median imputation rather than any fundamental algorithmic benefit.
+ 
+---
+ 
+### Experiment 3 vs 1: Effect of PCA
+ 
+| Metric | Baseline Test | PCA Test | Δ (Test) |
+|---|---|---|---|
+| Accuracy | 0.9836 | 0.9379 | -0.0457 |
+| AUC-ROC | 0.9942 | 0.9767 | -0.0175 |
+| PR-AUC | 0.3014 | 0.1155 | -0.1859 |
+| Precision | 0.1698 | 0.0488 | -0.1210 |
+| Recall | 0.9985 | 0.9437 | -0.0548 |
+| F2 (positive class) | 0.5052 | 0.2022 | -0.3030 |
+| MCC | 0.4083 | 0.2070 | -0.2013 |
+| Cost-Weighted Utility | -0.0131 | -0.0606 | -0.0475 |
+| Training Time (s) | 100.1 | 164.2 | +64.1 |
+ 
+### Confusion Matrix: Baseline vs PCA (Test Set)
+ 
+| Outcome | Baseline | PCA | Change |
+|---|---|---|---|
+| TP (caught bankruptcies) | 674 | 637 | -37 |
+| TN (correctly healthy) | 196,519 | 187,402 | -9,117 |
+| FP (false alarms) | 3,296 | 12,413 | +9,117 |
+| FN (missed bankruptcies) | 1 | 38 | +37 |
+ 
+**Key finding:** PCA with k=50 components significantly degraded performance across all metrics. PR-AUC halved from 0.3014 to 0.1155 and missed bankruptcies increased from 1 to 38. The 131 financial features carry complementary, non-redundant discriminative information that is lost when compressed to 50 principal components. PCA is harmful for this task and the baseline without PCA should be preferred for any deployment scenario.
+ 
+---
+ 
+### Summary: Best Model
+ 
+The **Baseline model (no scaling, no PCA)** provides the best balance of performance, simplicity, and speed:
+ 
+| Property | Value |
+|---|---|
+| PR-AUC | 0.3014 (vs random baseline of ~0.0034 — ~89x improvement) |
+| Recall | 0.9985 (674 out of 675 distressed companies detected) |
+| False Negatives | 1 (missed bankruptcy out of 675) |
+| False Positives | 3,296 |
+| MCC | 0.4083 |
+| Training Time | 100.1 seconds on YARN cluster |
+ 
+> **Note on PR-AUC:** Given the severe class imbalance (~0.4% positive class), PR-AUC is the primary evaluation metric rather than AUC-ROC. A random classifier would achieve PR-AUC ≈ 0.0034 (the positive class prevalence). The model's PR-AUC of 0.3014 represents approximately 89× improvement over random, demonstrating genuine discriminative power on the minority class.
+
 ## Requirements
 
 - Python 3.7+
