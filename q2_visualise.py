@@ -90,46 +90,50 @@ def plot_metric_comparison(df: pd.DataFrame, outdir: str):
 
 # ── Chart 2: Confusion matrices ───────────────────────────────────────────────
 def plot_confusion_matrices(df: pd.DataFrame, outdir: str):
-    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    fig, axes = plt.subplots(1, 4, figsize=(18, 5))
     fig.suptitle("Confusion Matrices — Test Set\n(Corporate Bankruptcy Forecasting — Temporal Split)",
                  fontsize=13, fontweight="bold")
 
     for ax, (_, row) in zip(axes, df.iterrows()):
-        tp, tn = row["Test_TP"], row["Test_TN"]
-        fp, fn = row["Test_FP"], row["Test_FN"]
+        tp, tn = int(row["Test_TP"]), int(row["Test_TN"])
+        fp, fn = int(row["Test_FP"]), int(row["Test_FN"])
         total  = tp + tn + fp + fn
 
-        cm = np.array([[tn, fp], [fn, tp]])
-        cm_pct = cm / total * 100
+        # Standard layout:
+        # row 0 = Actual Healthy,     col 0 = Predicted Healthy,    col 1 = Predicted Distressed
+        # row 1 = Actual Distressed,  col 0 = Predicted Healthy,    col 1 = Predicted Distressed
+        # [0,0]=TN  [0,1]=FP
+        # [1,0]=FN  [1,1]=TP
 
-        # Background colors
-        bg = np.array([["#EEF3FC", "#FDECEA"], ["#FFF3E0", "#E8F5E9"]])
-        for i in range(2):
-            for j in range(2):
-                ax.add_patch(plt.Rectangle(
-                    (j - 0.5, 1.5 - i - 0.5), 1, 1,
-                    color=bg[i][j], zorder=0,
-                ))
-
-        labels = np.array([
-            [f"TN\n{tn:,}\n({cm_pct[0,0]:.2f}%)", f"FP\n{fp:,}\n({cm_pct[0,1]:.2f}%)"],
-            [f"FN\n{fn:,}\n({cm_pct[1,0]:.2f}%)", f"TP\n{tp:,}\n({cm_pct[1,1]:.2f}%)"],
-        ])
-        text_colors = [["#1A5276", "#922B21"], ["#784212", "#1A7A4A"]]
-
-        for i in range(2):
-            for j in range(2):
-                ax.text(j, 1 - i, labels[i][j],
-                        ha="center", va="center",
-                        fontsize=9, fontweight="bold",
-                        color=text_colors[i][j])
+        cell_data = [
+            [(tn, "TN", "#EEF3FC", "#1A5276"),  (fp, "FP", "#FDECEA", "#922B21")],
+            [(fn, "FN", "#FFF3E0", "#784212"),  (tp, "TP", "#E8F5E9", "#1A7A4A")],
+        ]
+        row_labels = ["Actual\nHealthy", "Actual\nDistressed"]
+        col_labels = ["Predicted\nHealthy", "Predicted\nDistressed"]
 
         ax.set_xlim(-0.5, 1.5)
         ax.set_ylim(-0.5, 1.5)
+
+        for i in range(2):
+            for j in range(2):
+                val, label, bg, tc = cell_data[i][j]
+                pct = val / total * 100
+                # i=0 → top row (y=1), i=1 → bottom row (y=0)
+                y_pos = 1 - i
+                ax.add_patch(plt.Rectangle(
+                    (j - 0.5, y_pos - 0.5), 1, 1,
+                    color=bg, zorder=0,
+                ))
+                ax.text(j, y_pos,
+                        f"{label}\n{val:,}\n({pct:.2f}%)",
+                        ha="center", va="center",
+                        fontsize=9, fontweight="bold", color=tc)
+
         ax.set_xticks([0, 1])
-        ax.set_yticks([0, 1])
-        ax.set_xticklabels(["Predicted\nHealthy", "Predicted\nDistressed"], fontsize=9)
-        ax.set_yticklabels(["Actual\nDistressed", "Actual\nHealthy"], fontsize=9)
+        ax.set_yticks([1, 0])   # y=1 → row 0 (Healthy), y=0 → row 1 (Distressed)
+        ax.set_xticklabels(col_labels, fontsize=9)
+        ax.set_yticklabels(row_labels, fontsize=9)
         ax.set_title(row["short_name"], fontweight="bold",
                      color=row["color"], fontsize=11)
         ax.grid(False)
@@ -280,30 +284,53 @@ def plot_dashboard(df: pd.DataFrame, outdir: str):
     ax3.set_xlim(0, df["TrainTime_s"].max() * 1.25)
     ax3.grid(axis="y", alpha=0)
 
-    # ── Bottom: confusion matrix heatmap style ────────────────────────────────
+    # ── Bottom: confusion matrices ────────────────────────────────────────────
     for idx, (_, row) in enumerate(df.iterrows()):
         ax = fig.add_subplot(gs[2, idx])
-        tp, tn = row["Test_TP"], row["Test_TN"]
-        fp, fn = row["Test_FP"], row["Test_FN"]
+        tp, tn = int(row["Test_TP"]), int(row["Test_TN"])
+        fp, fn = int(row["Test_FP"]), int(row["Test_FN"])
         total  = tp + tn + fp + fn
-        cm     = np.array([[tn, fp], [fn, tp]], dtype=float)
-        cm_pct = cm / total * 100
 
-        im = ax.imshow(cm_pct, cmap="Blues", vmin=0, vmax=100, aspect="auto")
-        labels = [[f"TN\n{tn:,}", f"FP\n{fp:,}"],
-                  [f"FN\n{fn:,}", f"TP\n{tp:,}"]]
-        text_c = [["white" if cm_pct[i,j] > 50 else "black"
-                   for j in range(2)] for i in range(2)]
+        # Standard layout:
+        # [0,0]=TN [0,1]=FP  → row 0 = Actual Healthy   (y=1)
+        # [1,0]=FN [1,1]=TP  → row 1 = Actual Distressed (y=0)
+        cell_data = [
+            [(tn, "TN", 0.0),  (fp, "FP", 5.0)],
+            [(fn, "FN", 10.0), (tp, "TP", 80.0)],
+        ]
+
+        # Draw colored background rectangles
+        bg_colors = [["#EEF3FC", "#FDECEA"], ["#FFF3E0", "#E8F5E9"]]
+        text_cols = [["#1A5276", "#922B21"], ["#784212", "#1A7A4A"]]
+
+        ax.set_xlim(-0.5, 1.5)
+        ax.set_ylim(-0.5, 1.5)
+
         for i in range(2):
             for j in range(2):
-                ax.text(j, i, labels[i][j], ha="center", va="center",
-                        fontsize=8, fontweight="bold", color=text_c[i][j])
+                val, label, _ = cell_data[i][j]
+                y_pos = 1 - i   # i=0 → y=1 (top), i=1 → y=0 (bottom)
+                ax.add_patch(plt.Rectangle(
+                    (j - 0.5, y_pos - 0.5), 1, 1,
+                    color=bg_colors[i][j], zorder=0,
+                ))
+                ax.text(j, y_pos,
+                        f"{label}\n{val:,}",
+                        ha="center", va="center",
+                        fontsize=8, fontweight="bold",
+                        color=text_cols[i][j])
+
         ax.set_xticks([0, 1])
-        ax.set_yticks([0, 1])
+        ax.set_yticks([1, 0])
         ax.set_xticklabels(["Pred H", "Pred D"], fontsize=8)
-        ax.set_yticklabels(["Act D", "Act H"] if idx == 0 else ["", ""], fontsize=8)
+        ax.set_yticklabels(
+            ["Act\nHealthy", "Act\nDistressed"] if idx == 0 else ["", ""],
+            fontsize=8
+        )
         ax.set_title(row["short_name"], fontweight="bold",
                      color=row["color"], fontsize=9)
+        ax.grid(False)
+        ax.spines[:].set_visible(False)
 
     path = os.path.join(outdir, "05_dashboard.png")
     plt.savefig(path, bbox_inches="tight", facecolor=fig.get_facecolor())
