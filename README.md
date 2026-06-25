@@ -185,9 +185,9 @@ The **Baseline model (no scaling, no PCA)** provides the best balance of perform
 
 ## Local Replication (sklearn — Temporal Split)
 
-The cluster results above use a **random 80/20 split**. To explore the impact of **temporal data leakage**, the pipeline was replicated locally using scikit-learn with a **temporal split** — training on years 2006–2017 and testing on unseen future years 2018–2020.
+The cluster results above use a random 80/20 split. To explore out-of-time generalisation, the pipeline was replicated locally using scikit-learn with a temporal split — training on years 2006–2017 and testing on years 2018–2020.
 
-This reflects real-world deployment: a model trained on historical financials should forecast distress in future years it has never seen. Random splitting allows future company observations to leak into training, artificially inflating recall.
+Note that the target variable already captures future distress by construction (the label for year t reflects distress in year t+1), so there is no direct label leakage under either split. However, random splitting allows company-level pattern leakage — the same company appears across multiple years, so the model can learn firm-specific patterns from later observations before being evaluated on earlier ones. It also fails to test generalisation across changing macroeconomic conditions (e.g. post-2008 crisis, post-COVID). The temporal split addresses both risks.
 
 ### Why run locally?
 - The Hadoop cluster is a shared university resource — not always available
@@ -214,7 +214,7 @@ This reflects real-world deployment: a model trained on historical financials sh
 | False Positives | 3,296 | 4,050 | +754 |
 | False Negatives | 1 | 10 | +9 |
 
-**Key finding:** The temporal split produces a harder but more realistic evaluation. MCC improves from 0.408 to 0.536 and precision nearly doubles (0.17 → 0.29), suggesting the random split was leaking future company data into training — inflating recall artificially. The temporal model misses 10 bankruptcies vs 1 under random split, but this is a more honest estimate of real-world performance.
+**Key finding:** The temporal split produces a harder but more realistic evaluation. MCC improves from 0.408 to 0.536 and precision nearly doubles (0.17 → 0.29), suggesting the random split allowed company-level pattern leakage and did not test generalisation across changing macroeconomic conditions. The temporal model misses 10 bankruptcies vs 1 under random split. The higher FN count reflects a genuinely harder evaluation — the model is tested on 3 full years of companies it has never seen under different macroeconomic conditions — rather than any deterioration in model quality.
 
 > Note: Results are not directly comparable due to differences in the train/test split strategy and Random Forest implementation (Spark ML vs sklearn). The temporal split is the preferred evaluation for any production deployment scenario.
 
