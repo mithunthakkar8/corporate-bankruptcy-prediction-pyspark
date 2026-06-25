@@ -183,6 +183,61 @@ The **Baseline model (no scaling, no PCA)** provides the best balance of perform
  
 > **Note on PR-AUC:** Given the severe class imbalance (~0.4% positive class), PR-AUC is the primary evaluation metric rather than AUC-ROC. A random classifier would achieve PR-AUC ≈ 0.0034 (the positive class prevalence). The model's PR-AUC of 0.3014 represents approximately 89× improvement over random, demonstrating genuine discriminative power on the minority class.
 
+## Local Replication (sklearn — Temporal Split)
+
+The cluster results above use a **random 80/20 split**. To explore the impact of **temporal data leakage**, the pipeline was replicated locally using scikit-learn with a **temporal split** — training on years 2006–2017 and testing on unseen future years 2018–2020.
+
+This reflects real-world deployment: a model trained on historical financials should forecast distress in future years it has never seen. Random splitting allows future company observations to leak into training, artificially inflating recall.
+
+### Why run locally?
+- The Hadoop cluster is a shared university resource — not always available
+- 1M rows × 130 features is comfortably handled by sklearn with `n_jobs=-1` (all CPU cores)
+- Allows faster iteration and local visualisation without `spark-submit` overhead
+
+### Temporal Split Results (sklearn, full 1M rows)
+
+| Experiment | PR-AUC | Recall | Precision | F2 | MCC | Time (s) |
+|---|---|---|---|---|---|---|
+| Baseline | 0.337 | 0.994 | 0.293 | 0.673 | 0.536 | 60.6 |
+| StandardScaler | 0.350 | 0.992 | 0.293 | 0.672 | 0.535 | 58.8 |
+| PCA only | 0.126 | 0.873 | 0.080 | 0.294 | 0.255 | 116.6 |
+| Scaled + PCA | 0.126 | 0.873 | 0.080 | 0.294 | 0.255 | 116.0 |
+
+### Impact of Temporal Split vs Random Split
+
+| Metric | Random Split (cluster) | Temporal Split (local) | Δ |
+|---|---|---|---|
+| Recall | 0.9985 | 0.9941 | −0.0044 |
+| Precision | 0.1698 | 0.2933 | +0.1235 |
+| MCC | 0.4083 | 0.5361 | +0.1278 |
+| PR-AUC | 0.3014 | 0.3365 | +0.0351 |
+| False Positives | 3,296 | 4,050 | +754 |
+| False Negatives | 1 | 10 | +9 |
+
+**Key finding:** The temporal split produces a harder but more realistic evaluation. MCC improves from 0.408 to 0.536 and precision nearly doubles (0.17 → 0.29), suggesting the random split was leaking future company data into training — inflating recall artificially. The temporal model misses 10 bankruptcies vs 1 under random split, but this is a more honest estimate of real-world performance.
+
+> Note: Results are not directly comparable due to differences in the train/test split strategy and Random Forest implementation (Spark ML vs sklearn). The temporal split is the preferred evaluation for any production deployment scenario.
+
+### Results Dashboard
+
+![Results Dashboard](charts/05_dashboard.png)
+
+### Metric Comparison
+
+![Metric Comparison](charts/01_metric_comparison.png)
+
+### Effect of Scaling and PCA
+
+![Scaling vs PCA](charts/03_scaling_pca_effect.png)
+
+### Confusion Matrices
+
+![Confusion Matrices](charts/02_confusion_matrices.png)
+
+### Training Time
+
+![Training Time](charts/04_training_time.png)
+
 ## Requirements
 
 - Python 3.7+
